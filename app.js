@@ -698,12 +698,12 @@ function draw() {
   ctx.clearRect(0, 0, m.w, m.h);
   ctx.imageSmoothingEnabled = false;
   drawTable(ctx, m.w, m.h);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(PigArt.canvas, m.pigX, m.pigY);
   for (const coin of coins) {
     if (coin === dragged) continue;
     drawCoin(coin);
   }
-  ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(PigArt.canvas, m.pigX, m.pigY);
   if (dragged && coins.has(dragged)) drawCoin(dragged);
 }
 
