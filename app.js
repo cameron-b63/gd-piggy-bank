@@ -1,4 +1,4 @@
-const MIN = 0;
+const MIN = 1;
 const MAX = 1000;
 const KEY = "gd-piggy-bank";
 const CAT_MOUSE = 0x0001;
@@ -83,7 +83,7 @@ function savedSession() {
     const [low, high] = clampRange(data.rangeLow, data.rangeHigh);
     const total = data.total;
     const banked = data.banked;
-    if (!Number.isInteger(total) || total < 0 || total > MAX) return null;
+    if (!Number.isInteger(total) || total < MIN || total > MAX) return null;
     if (!Number.isInteger(banked) || banked < 0 || banked > total) return null;
     return { low, high, total, banked };
   } catch {
