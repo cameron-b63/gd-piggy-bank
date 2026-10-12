@@ -264,6 +264,7 @@ function resize() {
 }
 
 const COIN_DIAMETERS = [32, 44, 56];
+const MAX_COIN_R = 28;
 
 function spawnCoin(x, y) {
   const diameter = COIN_DIAMETERS[(Math.random() * COIN_DIAMETERS.length) | 0];
@@ -290,17 +291,90 @@ function spawnCoin(x, y) {
   Sleeping.set(body, false);
 }
 
+function pigSolidBoxes() {
+  const boxes = [];
+  for (const solid of PigArt.solids) {
+    if (solid.w < 1 || solid.h < 1) continue;
+    boxes.push({
+      x0: view.pigX + solid.x,
+      y0: view.pigY + solid.y,
+      x1: view.pigX + solid.x + solid.w,
+      y1: view.pigY + solid.y + solid.h,
+    });
+  }
+  return boxes;
+}
+
+function pointInPig(x, y, boxes) {
+  for (const box of boxes) {
+    if (x >= box.x0 && x < box.x1 && y >= box.y0 && y < box.y1) return true;
+  }
+  return false;
+}
+
+function pileFocus() {
+  const limits = playLimits(MAX_COIN_R);
+  const boxes = pigSolidBoxes();
+  let openRight = limits.maxX;
+  for (const box of boxes) {
+    if (box.y1 <= limits.minY || box.y0 >= limits.maxY) continue;
+    openRight = Math.min(openRight, box.x0 - MAX_COIN_R);
+  }
+  if (openRight < limits.minX) openRight = limits.minX;
+  const midY = (limits.minY + limits.maxY) / 2;
+  let cx = view.w / 2;
+  if (cx > openRight || pointInPig(cx, midY, boxes)) {
+    cx = (limits.minX + openRight) / 2;
+  }
+  cx = Math.min(openRight, Math.max(limits.minX, cx));
+  const cy = Math.min(limits.maxY, Math.max(limits.minY, midY));
+  return {
+    cx,
+    cy,
+    minX: limits.minX,
+    maxX: openRight,
+    minY: limits.minY,
+    maxY: limits.maxY,
+  };
+}
+
+function pileGrid(count, availW, availH) {
+  const pitchX = 20;
+  const pitchY = 18;
+  const cols = Math.max(1, Math.ceil(Math.sqrt(count)));
+  const rows = Math.ceil(count / cols);
+  const spanX = Math.max(0, cols - 1);
+  const spanY = Math.max(0, rows - 1);
+  let stepX = spanX ? pitchX : 0;
+  let stepY = spanY ? pitchY : 0;
+  let gridW = spanX * stepX;
+  let gridH = spanY * stepY;
+  if (gridW > availW || gridH > availH) {
+    stepX = spanX ? Math.min(pitchX, availW / spanX) : 0;
+    stepY = spanY ? Math.min(pitchY, availH / spanY) : 0;
+    gridW = spanX * stepX;
+    gridH = spanY * stepY;
+  }
+  return { cols, stepX, stepY, gridW, gridH };
+}
+
 function spawnPile(count) {
   if (!view || count <= 0) return;
-  const pitch = 40;
-  const cols = Math.min(3, count);
-  const left = Math.max(64, Math.round(view.w * 0.2));
-  const midY = view.h * 0.48;
+  const focus = pileFocus();
+  const availW = focus.maxX - focus.minX;
+  const availH = focus.maxY - focus.minY;
+  const grid = pileGrid(count, availW, availH);
+  let originX = focus.cx - grid.gridW / 2;
+  let originY = focus.cy - grid.gridH / 2;
+  originX = Math.min(focus.maxX - grid.gridW, Math.max(focus.minX, originX));
+  originY = Math.min(focus.maxY - grid.gridH, Math.max(focus.minY, originY));
   for (let i = 0; i < count; i++) {
-    const col = i % cols;
-    const row = Math.floor(i / cols);
-    const x = left + col * pitch + (Math.random() - 0.5) * 10;
-    const y = midY - row * (pitch * 0.72) + (Math.random() - 0.5) * 8;
+    const col = i % grid.cols;
+    const row = Math.floor(i / grid.cols);
+    let x = originX + col * grid.stepX + (Math.random() - 0.5) * Math.min(8, grid.stepX || 8);
+    let y = originY + row * grid.stepY + (Math.random() - 0.5) * Math.min(6, grid.stepY || 6);
+    x = Math.min(focus.maxX, Math.max(focus.minX, x));
+    y = Math.min(focus.maxY, Math.max(focus.minY, y));
     spawnCoin(x, y);
   }
 }
@@ -431,9 +505,9 @@ function putBack() {
   if (state.banked <= 0 || !view) return;
   state.banked -= 1;
   state.celebrated = false;
-  const span = Math.max(1, Math.min(view.w * 0.4, view.pigX - 80));
-  const x = 64 + Math.random() * span;
-  const y = view.h * 0.42 + (Math.random() - 0.5) * 36;
+  const focus = pileFocus();
+  const x = Math.min(focus.maxX, Math.max(focus.minX, focus.cx + (Math.random() - 0.5) * 12));
+  const y = Math.min(focus.maxY, Math.max(focus.minY, focus.cy + (Math.random() - 0.5) * 12));
   spawnCoin(x, y);
   sfx.putBack();
   save();
