@@ -262,8 +262,11 @@ function resize() {
   renderRange();
 }
 
+const COIN_DIAMETERS = [32, 44, 56];
+
 function spawnCoin(x, y) {
-  const radius = CoinArt.radius;
+  const diameter = COIN_DIAMETERS[(Math.random() * COIN_DIAMETERS.length) | 0];
+  const radius = diameter / 2;
   const variants = CoinArt.variants;
   const body = Bodies.circle(x, y, radius, {
     restitution: 0.05,
@@ -275,9 +278,11 @@ function spawnCoin(x, y) {
     sleepThreshold: 28,
     collisionFilter: { category: CAT_COIN, mask: CAT_MOUSE | CAT_COIN | CAT_WALL | CAT_PIG },
   });
+  body.radius = radius;
   body.sprite = variants[(Math.random() * variants.length) | 0];
+  body.facing = ((Math.random() * 24) | 0) * (Math.PI / 12);
   Body.setInertia(body, Infinity);
-  Body.setAngle(body, 0);
+  Body.setAngle(body, body.facing);
   Body.setAngularVelocity(body, 0);
   Composite.add(engine.world, body);
   coins.add(body);
@@ -286,10 +291,9 @@ function spawnCoin(x, y) {
 
 function spawnPile(count) {
   if (!view || count <= 0) return;
-  const radius = CoinArt.radius;
-  const pitch = Math.round(radius * 1.45);
+  const pitch = 40;
   const cols = Math.min(3, count);
-  const left = Math.max(36 + radius, Math.round(view.w * 0.2));
+  const left = Math.max(64, Math.round(view.w * 0.2));
   const midY = view.h * 0.48;
   for (let i = 0; i < count; i++) {
     const col = i % cols;
@@ -357,7 +361,7 @@ function centerInSlot(coin) {
 function collectBanked() {
   if (!view) return;
   for (const coin of coins) {
-    if (coin.swallowed) continue;
+    if (coin === dragged || coin.swallowed) continue;
     if (!centerInSlot(coin)) continue;
     coin.swallowed = true;
     doomed.push(coin);
@@ -366,9 +370,8 @@ function collectBanked() {
 
 function lockCoinSpin() {
   for (const coin of coins) {
-    if (coin.angle === 0 && coin.angularVelocity === 0) continue;
-    Body.setAngle(coin, 0);
-    Body.setAngularVelocity(coin, 0);
+    if (coin.angularVelocity !== 0) Body.setAngularVelocity(coin, 0);
+    if (coin.angle !== coin.facing) Body.setAngle(coin, coin.facing);
   }
 }
 
@@ -376,9 +379,8 @@ function putBack() {
   if (state.banked <= 0 || !view) return;
   state.banked -= 1;
   state.celebrated = false;
-  const radius = CoinArt.radius;
   const span = Math.max(1, Math.min(view.w * 0.4, view.pigX - 80));
-  const x = 40 + radius + Math.random() * span;
+  const x = 64 + Math.random() * span;
   const y = view.h * 0.42 + (Math.random() - 0.5) * 36;
   spawnCoin(x, y);
   sfx.putBack();
@@ -546,11 +548,15 @@ Events.on(engine, "collisionStart", (event) => {
 });
 
 function drawCoin(coin) {
-  if (coin.swallowed || centerInSlot(coin)) return;
-  const radius = CoinArt.radius;
-  const x = Math.round(coin.position.x - radius);
-  const y = Math.round(coin.position.y - radius);
-  ctx.drawImage(coin.sprite, x, y);
+  const held = coin === dragged;
+  if (!held && (coin.swallowed || centerInSlot(coin))) return;
+  const radius = coin.radius;
+  ctx.save();
+  ctx.translate(Math.round(coin.position.x), Math.round(coin.position.y));
+  ctx.rotate(coin.facing);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(coin.sprite, -radius, -radius, radius * 2, radius * 2);
+  ctx.restore();
 }
 
 function draw() {
