@@ -5,6 +5,7 @@ const CAT_MOUSE = 0x0001;
 const CAT_COIN = 0x0002;
 const CAT_WALL = 0x0004;
 const CAT_PIG = 0x0008;
+const WALL_T = 18;
 
 const bar = document.querySelector("#bar");
 const statusEl = document.querySelector("#status");
@@ -214,7 +215,7 @@ function layout(w, h) {
 function rebuildStatics() {
   for (const body of statics) Composite.remove(engine.world, body);
   const m = view;
-  const t = 18;
+  const t = WALL_T;
   const bodies = [
     wall(m.w / 2, t / 2, m.w, t),
     wall(m.w / 2, m.h - t / 2, m.w, t),
@@ -340,6 +341,67 @@ function flushRemovals() {
   if (finished) sfx.goal();
 }
 
+function playLimits(radius) {
+  return {
+    minX: WALL_T + radius,
+    maxX: view.w - WALL_T - radius,
+    minY: WALL_T + radius,
+    maxY: view.h - WALL_T - radius,
+  };
+}
+
+function containCoins() {
+  if (!view) return;
+  for (const coin of coins) {
+    const limits = playLimits(coin.radius);
+    let x = coin.position.x;
+    let y = coin.position.y;
+    let vx = coin.velocity.x;
+    let vy = coin.velocity.y;
+    let fix = false;
+    if (x < limits.minX) {
+      x = limits.minX;
+      if (vx < 0) vx = 0;
+      fix = true;
+    } else if (x > limits.maxX) {
+      x = limits.maxX;
+      if (vx > 0) vx = 0;
+      fix = true;
+    }
+    if (y < limits.minY) {
+      y = limits.minY;
+      if (vy < 0) vy = 0;
+      fix = true;
+    } else if (y > limits.maxY) {
+      y = limits.maxY;
+      if (vy > 0) vy = 0;
+      fix = true;
+    }
+    if (!fix) continue;
+    Body.setPosition(coin, { x, y });
+    Body.setVelocity(coin, { x: vx, y: vy });
+  }
+}
+
+function clampDragConstraint() {
+  if (!view) return;
+  const constraint = mouseConstraint.constraint;
+  const coin = constraint.bodyB;
+  if (!coin || coin.label !== "coin" || !coins.has(coin)) return;
+  const limits = playLimits(coin.radius);
+  const pointB = constraint.pointB;
+  const delta = coin.angle - constraint.angleB;
+  const cos = Math.cos(delta);
+  const sin = Math.sin(delta);
+  const ox = pointB.x * cos - pointB.y * sin;
+  const oy = pointB.x * sin + pointB.y * cos;
+  const point = constraint.pointA;
+  constraint.pointA = {
+    x: Math.min(limits.maxX + ox, Math.max(limits.minX + ox, point.x)),
+    y: Math.min(limits.maxY + oy, Math.max(limits.minY + oy, point.y)),
+  };
+}
+
 function slotBounds() {
   const slot = PigArt.slot;
   return {
@@ -356,16 +418,6 @@ function centerInSlot(coin) {
   const x = coin.position.x;
   const y = coin.position.y;
   return x >= box.x0 && x < box.x1 && y >= box.y0 && y < box.y1;
-}
-
-function collectBanked() {
-  if (!view) return;
-  for (const coin of coins) {
-    if (coin === dragged || coin.swallowed) continue;
-    if (!centerInSlot(coin)) continue;
-    coin.swallowed = true;
-    doomed.push(coin);
-  }
 }
 
 function lockCoinSpin() {
@@ -534,7 +586,14 @@ Events.on(mouseConstraint, "enddrag", (event) => {
   if (!coins.has(body)) return;
   body.collisionFilter.mask = CAT_MOUSE | CAT_COIN | CAT_WALL | CAT_PIG;
   sfx.release();
+  if (centerInSlot(body)) {
+    body.swallowed = true;
+    doomed.push(body);
+    flushRemovals();
+  }
 });
+
+Events.on(engine, "beforeUpdate", clampDragConstraint);
 
 Events.on(engine, "collisionStart", (event) => {
   for (const pair of event.pairs) {
@@ -586,7 +645,7 @@ function frame(now) {
   while (acc >= 16.666 && steps < 3) {
     Engine.update(engine, 16.666);
     lockCoinSpin();
-    collectBanked();
+    containCoins();
     flushRemovals();
     acc -= 16.666;
     steps++;
