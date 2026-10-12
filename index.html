@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Piggy bank</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Silkscreen&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="bar" id="bar">
+      <p class="status" id="status"></p>
+      <div class="range-field">
+        <span class="label" id="range-label">Range</span>
+        <span class="range-num" id="low-readout">40</span>
+        <div class="track" id="track">
+          <div class="fill" id="fill"></div>
+          <button type="button" class="thumb" id="thumb-low" aria-label="Range low"></button>
+          <button type="button" class="thumb" id="thumb-high" aria-label="Range high"></button>
+        </div>
+        <span class="range-num" id="high-readout">60</span>
+      </div>
+      <div class="actions">
+        <button type="button" id="back">Put one back</button>
+        <button type="button" id="reset">Reset</button>
+      </div>
+    </header>
+    <canvas class="stage" id="stage"></canvas>
+    <script src="vendor/matter.min.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
