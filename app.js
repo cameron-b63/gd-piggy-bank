@@ -681,8 +681,7 @@ Events.on(engine, "collisionStart", (event) => {
 });
 
 function drawCoin(coin) {
-  const held = coin === dragged;
-  if (!held && (coin.swallowed || centerInSlot(coin))) return;
+  if (coin.swallowed) return;
   const radius = coin.radius;
   ctx.save();
   ctx.translate(Math.round(coin.position.x), Math.round(coin.position.y));
