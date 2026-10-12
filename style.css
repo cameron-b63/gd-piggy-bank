@@ -92,14 +92,29 @@ body::before {
   font-size: 12px;
 }
 
-.bar--done .label,
-.bar--done .range-num { color: var(--color-text); }
+.bar--done .label { color: var(--color-text); }
 
 .range-num {
-  min-width: 4ch;
+  width: 4.5ch;
+  padding: 0.35rem 0.15rem;
+  border: 3px solid var(--color-border);
+  border-radius: 2px;
+  background: var(--color-surface-inset);
+  box-shadow: var(--shadow-sm);
   color: var(--color-accent);
+  font-family: inherit;
   font-size: 16px;
   text-align: center;
+}
+
+.range-num:focus {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.bar--done .range-num {
+  color: var(--color-text);
+  background: var(--color-bg);
 }
 
 .track {

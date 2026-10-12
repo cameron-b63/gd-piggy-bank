@@ -2,7 +2,7 @@ const MIN = 0;
 const MAX = 1000;
 const KEY = "gd-piggy-bank";
 const COIN_R = 8;
-const PIG_SCALE = 5;
+const PIG_SCALE = 6;
 
 const PAL = {
   o: "#1f1f1f",
@@ -14,25 +14,27 @@ const PAL = {
 };
 
 const PIG = [
-  "..........ssssss........................",
-  "........oossssssoo......................",
-  ".......obssssssssbo.....................",
-  "......obsssssssssbbo....................",
-  ".....obbsssssssssbbo........eee.........",
-  "....obbbbssssssssbbbo......ekkke........",
-  "...obbbbbsssssssssbbbbo....eeeoo........",
-  "..obbbbbbbddddbbbbbbbbbo.....obbo.......",
-  "..obbbbbbbbbbbbbbbbbbbbbbo...obbo.......",
-  ".obbbbbbbbbbbbbbbbbbbbbbbbboobbo........",
-  ".obbbbbbbbbbbbbbbbbbbbbbbbbbbbbbo.......",
-  ".obbbbbbbbbbbbbbbbeebbbbbbbbbbbbbbo.....",
-  "..obbbbbbbbbbbbbbbbkebbbbbbbbbbbbbbo....",
-  "..obbbbbbbbbbbbbbbbeebbbbbbbbbbbbbbo....",
-  "...obbbbbbbbbbbbbbbbbbbbbbbbbbbbbbo.....",
-  "....obbbbbbbbbbbbbbbbbbbbbbbbbbbbo......",
-  ".....ooooooooooooooooooooooooooooo......",
-  "......dd....................dd..........",
-  "......oo....................oo..........",
+  "........................................",
+  ".........................oo.............",
+  "........................obbo............",
+  ".......................obbbbo...........",
+  "..............ssssss..obbbbbo...........",
+  "............oossssssoobbbbbbo...........",
+  "...........obssssssssbbbbbbbbo..........",
+  "..........obbbbbbbbbbbbbbbbbbbo.........",
+  ".........obbbddddbbbbbbbbbbbbbbbo.......",
+  "........obbbbbbbbbbbbbbbbbbbbbbbbo......",
+  ".......obbbbbbbbbbbbbbbbeebbbbbbbbbo....",
+  "......obbbbbbbbbbbbbbbbkekbbbbbbbbbo....",
+  "......obbbbbbbbbbbbbbbbeebbbbbookko.....",
+  ".......obbbbbbbbbbbbbbbbbbbbbbbobbo.....",
+  "........obbbbbbbbbbbbbbbbbbbbbbbbo......",
+  ".......oobbbbbbbbbbbbbbbbbbbbbbbo.......",
+  "......oo.obbbbbbbbbbbbbbbbbbbbbo........",
+  ".....oo...obbbbbbbbbbbbbbbbbbbo.........",
+  "....oo.....oooooooooooooooooooo.........",
+  "...........oo....oo......oo...oo........",
+  "...........oo....oo......oo...oo........",
 ];
 
 const COIN = [
@@ -255,20 +257,26 @@ function wall(x, y, w, h) {
 }
 
 function measure(w, h) {
-  const floor = h - 18;
+  const tableH = 24;
+  const legRoom = 78;
+  const floor = h - legRoom - tableH;
+  const tableX = 40;
+  const tableW = Math.max(280, w - 80);
   const bankW = PIG[0].length * PIG_SCALE;
   const bankH = PIG.length * PIG_SCALE;
-  const bankX = Math.round(w - 28 - bankW);
+  const bankX = Math.round(tableX + tableW - 28 - bankW);
   const bankY = Math.round(floor - bankH);
-  const penRight = Math.max(140, bankX - 92);
+  const penRight = Math.max(tableX + 180, bankX - 36);
   return {
     w,
     h,
     floor,
+    tableX,
+    tableW,
+    tableH,
     bankX,
     bankY,
-    pen: { x: 20, y: 16, w: penRight - 20, h: floor - 16 },
-    bumperX: penRight,
+    pen: { x: tableX + 20, y: 16, w: penRight - (tableX + 20), h: floor - 16 },
   };
 }
 
@@ -324,10 +332,9 @@ function rebuildStatics() {
   for (const body of statics) Composite.remove(engine.world, body);
   const m = view;
   statics = [
-    wall(m.w / 2, m.floor + 30, m.w + 80, 60),
-    wall(-30, m.floor - 2000, 60, 5000),
-    wall(m.w + 30, m.floor - 2000, 60, 5000),
-    wall(m.bumperX + 8, m.floor - 12, 16, 24),
+    wall(m.tableX + m.tableW / 2, m.floor + 20, m.tableW, 40),
+    wall(m.tableX - 10, m.floor - 1600, 20, 3400),
+    wall(m.tableX + m.tableW + 10, m.floor - 1600, 20, 3400),
     ...bankSolids(m.bankX, m.bankY),
   ];
   Composite.add(engine.world, statics);
@@ -439,8 +446,8 @@ function renderRange() {
   thumbHigh.style.left = xOf(state.high) + "px";
   fill.style.left = xOf(state.low) + "px";
   fill.style.width = Math.max(0, xOf(state.high) - xOf(state.low)) + "px";
-  lowReadout.textContent = String(state.low);
-  highReadout.textContent = String(state.high);
+  if (document.activeElement !== lowReadout) lowReadout.value = String(state.low);
+  if (document.activeElement !== highReadout) highReadout.value = String(state.high);
   thumbLow.setAttribute("aria-valuemin", String(MIN));
   thumbLow.setAttribute("aria-valuemax", String(state.high));
   thumbLow.setAttribute("aria-valuenow", String(state.low));
@@ -508,6 +515,29 @@ function onThumbKey(which, event) {
 thumbLow.addEventListener("keydown", (event) => onThumbKey("low", event));
 thumbHigh.addEventListener("keydown", (event) => onThumbKey("high", event));
 
+function bindBound(input, which) {
+  input.addEventListener("input", () => {
+    const raw = input.value.trim();
+    if (!/^\d+$/.test(raw)) return;
+    const value = Number(raw);
+    if (value > MAX) return;
+    applyThumb(which, value);
+    const committed = String(which === "low" ? state.low : state.high);
+    if (committed !== raw && !committed.startsWith(raw)) input.value = committed;
+  });
+  input.addEventListener("blur", () => {
+    const raw = input.value.trim();
+    if (/^\d+$/.test(raw)) applyThumb(which, Number(raw));
+    input.value = String(which === "low" ? state.low : state.high);
+  });
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") input.blur();
+  });
+}
+
+bindBound(lowReadout, "low");
+bindBound(highReadout, "high");
+
 backBtn.addEventListener("click", () => {
   unlockAudio();
   putBack();
@@ -551,17 +581,49 @@ Events.on(engine, "collisionStart", (event) => {
   }
 });
 
+function drawTable(m) {
+  const x = m.tableX;
+  const y = m.floor;
+  const w = m.tableW;
+  const h = m.tableH;
+  ctx.fillStyle = "#c7a27a";
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = "#5a4635";
+  ctx.fillRect(x, y + h - 8, w, 8);
+  for (let plank = x + 12; plank < x + w - 8; plank += 18) {
+    ctx.fillRect(plank, y + 6, 2, h - 14);
+  }
+  ctx.fillStyle = "#f2ebd9";
+  ctx.fillRect(x + 3, y + 3, w - 6, 2);
+  ctx.fillStyle = "#1f1f1f";
+  ctx.fillRect(x, y, w, 3);
+  ctx.fillRect(x, y + h - 3, w, 3);
+  ctx.fillRect(x, y, 3, h);
+  ctx.fillRect(x + w - 3, y, 3, h);
+
+  const legW = 18;
+  const legTop = y + h;
+  const legH = m.h - legTop - 10;
+  const inset = Math.min(120, Math.floor(w * 0.18));
+  for (const lx of [x + 22, x + inset, x + w - inset - legW, x + w - 22 - legW]) {
+    ctx.fillStyle = "#5a4635";
+    ctx.fillRect(lx, legTop, legW, legH);
+    ctx.fillStyle = "#c7a27a";
+    ctx.fillRect(lx + 4, legTop, 3, legH - 4);
+    ctx.fillStyle = "#1f1f1f";
+    ctx.fillRect(lx, legTop, 3, legH);
+    ctx.fillRect(lx + legW - 3, legTop, 3, legH);
+    ctx.fillRect(lx - 4, legTop + legH - 6, legW + 8, 6);
+    ctx.fillRect(lx - 4, legTop + legH - 3, legW + 8, 3);
+  }
+}
+
 function draw() {
   const m = view;
   if (!m) return;
   ctx.clearRect(0, 0, m.w, m.h);
   ctx.imageSmoothingEnabled = false;
-  ctx.fillStyle = "#3a3a3a";
-  ctx.fillRect(0, m.floor, m.w, m.h - m.floor);
-  ctx.fillStyle = "#1f1f1f";
-  ctx.fillRect(0, m.floor, m.w, 3);
-  ctx.fillStyle = "#5a4635";
-  ctx.fillRect(m.bumperX, m.floor - 24, 16, 24);
+  drawTable(m);
 
   for (const coin of coins) {
     if (coin === dragged) continue;
