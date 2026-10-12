@@ -1,52 +1,10 @@
 const MIN = 0;
 const MAX = 1000;
 const KEY = "gd-piggy-bank";
-const COIN_R = 8;
-const PIG_SCALE = 6;
-
-const PAL = {
-  o: "#1f1f1f",
-  b: "#ff7a1a",
-  d: "#d9620a",
-  s: "#2e2e2e",
-  e: "#f2ebd9",
-  k: "#1a1a1a",
-};
-
-const PIG = [
-  "........................................",
-  ".........................oo.............",
-  "........................obbo............",
-  ".......................obbbbo...........",
-  "..............ssssss..obbbbbo...........",
-  "............oossssssoobbbbbbo...........",
-  "...........obssssssssbbbbbbbbo..........",
-  "..........obbbbbbbbbbbbbbbbbbbo.........",
-  ".........obbbddddbbbbbbbbbbbbbbbo.......",
-  "........obbbbbbbbbbbbbbbbbbbbbbbbo......",
-  ".......obbbbbbbbbbbbbbbbeebbbbbbbbbo....",
-  "......obbbbbbbbbbbbbbbbkekbbbbbbbbbo....",
-  "......obbbbbbbbbbbbbbbbeebbbbbookko.....",
-  ".......obbbbbbbbbbbbbbbbbbbbbbbobbo.....",
-  "........obbbbbbbbbbbbbbbbbbbbbbbbo......",
-  ".......oobbbbbbbbbbbbbbbbbbbbbbbo.......",
-  "......oo.obbbbbbbbbbbbbbbbbbbbbo........",
-  ".....oo...obbbbbbbbbbbbbbbbbbbo.........",
-  "....oo.....oooooooooooooooooooo.........",
-  "...........oo....oo......oo...oo........",
-  "...........oo....oo......oo...oo........",
-];
-
-const COIN = [
-  "..oooo..",
-  ".obddbo.",
-  "obbeebbo",
-  "obbeebbo",
-  "obbeebbo",
-  "obbeebbo",
-  ".obddbo.",
-  "..oooo..",
-];
+const CAT_MOUSE = 0x0001;
+const CAT_COIN = 0x0002;
+const CAT_WALL = 0x0004;
+const CAT_PIG = 0x0008;
 
 const bar = document.querySelector("#bar");
 const statusEl = document.querySelector("#status");
@@ -70,37 +28,15 @@ let dragged = null;
 
 const { Engine, Bodies, Body, Composite, Events, Mouse, MouseConstraint, Sleeping } = Matter;
 const engine = Engine.create({ enableSleeping: true });
-engine.gravity.y = 1.6;
+engine.gravity.x = 0;
+engine.gravity.y = 0;
 const mouse = Mouse.create(canvas);
 const mouseConstraint = MouseConstraint.create(engine, {
   mouse,
-  collisionFilter: { mask: 0xffffffff },
+  collisionFilter: { category: CAT_MOUSE, mask: CAT_COIN },
   constraint: { stiffness: 0.85, damping: 0.15, length: 0 },
 });
 Composite.add(engine.world, mouseConstraint);
-
-const pigSprite = sprite(PIG, PIG_SCALE);
-const coinSprite = sprite(COIN, 2);
-
-function sprite(rows, scale) {
-  const width = rows[0].length;
-  for (const row of rows) {
-    if (row.length !== width) throw new Error("sprite row length");
-  }
-  const canvasEl = document.createElement("canvas");
-  canvasEl.width = width * scale;
-  canvasEl.height = rows.length * scale;
-  const g = canvasEl.getContext("2d");
-  rows.forEach((row, y) => {
-    for (let x = 0; x < row.length; x++) {
-      const color = PAL[row[x]];
-      if (!color) continue;
-      g.fillStyle = color;
-      g.fillRect(x * scale, y * scale, scale, scale);
-    }
-  });
-  return canvasEl;
-}
 
 function clampRange(low, high) {
   low = Math.round(Number(low));
@@ -253,90 +189,61 @@ function wall(x, y, w, h) {
     friction: 0.85,
     restitution: 0,
     label: "wall",
+    collisionFilter: { category: CAT_WALL, mask: CAT_COIN },
   });
 }
 
-function measure(w, h) {
-  const tableH = 24;
-  const legRoom = 78;
-  const floor = h - legRoom - tableH;
-  const tableX = 40;
-  const tableW = Math.max(280, w - 80);
-  const bankW = PIG[0].length * PIG_SCALE;
-  const bankH = PIG.length * PIG_SCALE;
-  const bankX = Math.round(tableX + tableW - 28 - bankW);
-  const bankY = Math.round(floor - bankH);
-  const penRight = Math.max(tableX + 180, bankX - 36);
-  return {
-    w,
-    h,
-    floor,
-    tableX,
-    tableW,
-    tableH,
-    bankX,
-    bankY,
-    pen: { x: tableX + 20, y: 16, w: penRight - (tableX + 20), h: floor - 16 },
-  };
-}
-
-function slotSensor(originX, originY) {
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -1;
-  let maxY = -1;
-  PIG.forEach((row, y) => {
-    for (let x = 0; x < row.length; x++) {
-      if (row[x] !== "s") continue;
-      minX = Math.min(minX, x);
-      minY = Math.min(minY, y);
-      maxX = Math.max(maxX, x);
-      maxY = Math.max(maxY, y);
-    }
-  });
-  const x = originX + minX * PIG_SCALE;
-  const y = originY + minY * PIG_SCALE;
-  const w = (maxX - minX + 1) * PIG_SCALE;
-  const h = (maxY - minY + 1) * PIG_SCALE;
-  return Bodies.rectangle(x + w / 2, y + h / 2, w, h, {
+function pigBlock(x, y, w, h) {
+  return Bodies.rectangle(x, y, w, h, {
     isStatic: true,
-    isSensor: true,
-    label: "slot",
+    friction: 0.9,
+    restitution: 0,
+    label: "pig",
+    collisionFilter: { category: CAT_PIG, mask: CAT_COIN },
   });
 }
 
-function bankSolids(originX, originY) {
-  const bodies = [];
-  PIG.forEach((row, y) => {
-    let x = 0;
-    while (x < row.length) {
-      while (x < row.length && (row[x] === "." || row[x] === "s")) x++;
-      const start = x;
-      while (x < row.length && row[x] !== "." && row[x] !== "s") x++;
-      if (x === start) continue;
-      const w = (x - start) * PIG_SCALE;
-      const h = PIG_SCALE + 1;
-      bodies.push(wall(
-        originX + start * PIG_SCALE + w / 2,
-        originY + y * PIG_SCALE + PIG_SCALE / 2,
-        w,
-        h,
-      ));
-    }
-  });
-  bodies.push(slotSensor(originX, originY));
-  return bodies;
+function layout(w, h) {
+  const artW = PigArt.canvas.width;
+  const artH = PigArt.canvas.height;
+  const pigX = Math.max(28, Math.round(w - artW - 24));
+  const pigY = Math.round(Math.min(Math.max(28, (h - artH) / 2), Math.max(28, h - artH - 28)));
+  return { w, h, pigX, pigY };
 }
 
 function rebuildStatics() {
   for (const body of statics) Composite.remove(engine.world, body);
   const m = view;
-  statics = [
-    wall(m.tableX + m.tableW / 2, m.floor + 20, m.tableW, 40),
-    wall(m.tableX - 10, m.floor - 1600, 20, 3400),
-    wall(m.tableX + m.tableW + 10, m.floor - 1600, 20, 3400),
-    ...bankSolids(m.bankX, m.bankY),
+  const t = 18;
+  const bodies = [
+    wall(m.w / 2, t / 2, m.w, t),
+    wall(m.w / 2, m.h - t / 2, m.w, t),
+    wall(t / 2, m.h / 2, t, m.h),
+    wall(m.w - t / 2, m.h / 2, t, m.h),
   ];
+  for (const solid of PigArt.solids) {
+    if (solid.w < 1 || solid.h < 1) continue;
+    bodies.push(pigBlock(
+      m.pigX + solid.x + solid.w / 2,
+      m.pigY + solid.y + solid.h / 2,
+      solid.w,
+      solid.h,
+    ));
+  }
+  const slot = PigArt.slot;
+  bodies.push(Bodies.rectangle(
+    m.pigX + slot.x + slot.w / 2,
+    m.pigY + slot.y + slot.h / 2,
+    slot.w,
+    slot.h,
+    {
+      isStatic: true,
+      isSensor: true,
+      label: "slot",
+      collisionFilter: { category: CAT_PIG, mask: CAT_COIN },
+    },
+  ));
+  statics = bodies;
   Composite.add(engine.world, statics);
 }
 
@@ -350,34 +257,45 @@ function resize() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.imageSmoothingEnabled = false;
   mouse.pixelRatio = dpr;
-  view = measure(w, h);
+  view = layout(w, h);
   rebuildStatics();
   renderRange();
 }
 
 function spawnCoin(x, y) {
-  const body = Bodies.circle(x, y, COIN_R, {
-    restitution: 0.08,
-    friction: 0.45,
-    frictionStatic: 0.7,
-    frictionAir: 0.02,
+  const radius = CoinArt.radius;
+  const variants = CoinArt.variants;
+  const body = Bodies.circle(x, y, radius, {
+    restitution: 0.05,
+    friction: 0.4,
+    frictionStatic: 0.6,
+    frictionAir: 0.08,
     density: 0.002,
     label: "coin",
-    sleepThreshold: 36,
+    sleepThreshold: 28,
+    collisionFilter: { category: CAT_COIN, mask: CAT_MOUSE | CAT_COIN | CAT_WALL | CAT_PIG },
   });
+  body.sprite = variants[(Math.random() * variants.length) | 0];
   Body.setInertia(body, Infinity);
+  Body.setAngle(body, 0);
+  Body.setAngularVelocity(body, 0);
   Composite.add(engine.world, body);
   coins.add(body);
+  Sleeping.set(body, false);
 }
 
 function spawnPile(count) {
   if (!view || count <= 0) return;
-  const cols = Math.max(1, Math.floor((view.pen.w - 28) / (COIN_R * 2 + 2)));
+  const radius = CoinArt.radius;
+  const pitch = Math.round(radius * 1.45);
+  const cols = Math.min(3, count);
+  const left = Math.max(36 + radius, Math.round(view.w * 0.2));
+  const midY = view.h * 0.48;
   for (let i = 0; i < count; i++) {
     const col = i % cols;
     const row = Math.floor(i / cols);
-    const x = view.pen.x + 18 + COIN_R + col * (COIN_R * 2 + 2);
-    const y = view.pen.y + 8 - row * (COIN_R * 2 + 1);
+    const x = left + col * pitch + (Math.random() - 0.5) * 10;
+    const y = midY - row * (pitch * 0.72) + (Math.random() - 0.5) * 8;
     spawnCoin(x, y);
   }
 }
@@ -386,6 +304,15 @@ function clearCoins() {
   doomed.length = 0;
   for (const coin of coins) Composite.remove(engine.world, coin);
   coins.clear();
+  dragged = null;
+}
+
+function releaseDrag(coin) {
+  if (dragged === coin) dragged = null;
+  if (mouseConstraint.body === coin) {
+    mouseConstraint.body = null;
+    mouseConstraint.constraint.bodyB = null;
+  }
 }
 
 function flushRemovals() {
@@ -395,6 +322,7 @@ function flushRemovals() {
   for (const coin of batch) {
     if (!coins.has(coin)) continue;
     coins.delete(coin);
+    releaseDrag(coin);
     Composite.remove(engine.world, coin);
     gained++;
   }
@@ -408,12 +336,51 @@ function flushRemovals() {
   if (finished) sfx.goal();
 }
 
+function slotBounds() {
+  const slot = PigArt.slot;
+  return {
+    x0: view.pigX + slot.x,
+    y0: view.pigY + slot.y,
+    x1: view.pigX + slot.x + slot.w,
+    y1: view.pigY + slot.y + slot.h,
+  };
+}
+
+function centerInSlot(coin) {
+  if (!view) return false;
+  const box = slotBounds();
+  const x = coin.position.x;
+  const y = coin.position.y;
+  return x >= box.x0 && x < box.x1 && y >= box.y0 && y < box.y1;
+}
+
+function collectBanked() {
+  if (!view) return;
+  for (const coin of coins) {
+    if (coin.swallowed) continue;
+    if (!centerInSlot(coin)) continue;
+    coin.swallowed = true;
+    doomed.push(coin);
+  }
+}
+
+function lockCoinSpin() {
+  for (const coin of coins) {
+    if (coin.angle === 0 && coin.angularVelocity === 0) continue;
+    Body.setAngle(coin, 0);
+    Body.setAngularVelocity(coin, 0);
+  }
+}
+
 function putBack() {
   if (state.banked <= 0 || !view) return;
   state.banked -= 1;
   state.celebrated = false;
-  const x = view.pen.x + 24 + Math.random() * Math.max(1, view.pen.w - 48);
-  spawnCoin(x, view.pen.y + 12);
+  const radius = CoinArt.radius;
+  const span = Math.max(1, Math.min(view.w * 0.4, view.pigX - 80));
+  const x = 40 + radius + Math.random() * span;
+  const y = view.h * 0.42 + (Math.random() - 0.5) * 36;
+  spawnCoin(x, y);
   sfx.putBack();
   save();
   updateUi();
@@ -553,6 +520,7 @@ window.addEventListener("pointerdown", unlockAudio);
 Events.on(mouseConstraint, "startdrag", (event) => {
   if (event.body.label !== "coin") return;
   dragged = event.body;
+  event.body.collisionFilter.mask = CAT_MOUSE | CAT_COIN | CAT_WALL;
   Sleeping.set(event.body, false);
   unlockAudio();
   sfx.grab();
@@ -561,7 +529,9 @@ Events.on(mouseConstraint, "startdrag", (event) => {
 Events.on(mouseConstraint, "enddrag", (event) => {
   const body = event.body;
   dragged = null;
-  if (coins.has(body)) sfx.release();
+  if (!coins.has(body)) return;
+  body.collisionFilter.mask = CAT_MOUSE | CAT_COIN | CAT_WALL | CAT_PIG;
+  sfx.release();
 });
 
 Events.on(engine, "collisionStart", (event) => {
@@ -569,53 +539,18 @@ Events.on(engine, "collisionStart", (event) => {
     const coin = pair.bodyA.label === "coin" ? pair.bodyA : pair.bodyB.label === "coin" ? pair.bodyB : null;
     if (!coin) continue;
     const other = coin === pair.bodyA ? pair.bodyB : pair.bodyA;
-    if (other.label === "slot") {
-      if (!coin.swallowed) {
-        coin.swallowed = true;
-        doomed.push(coin);
-      }
-      continue;
-    }
+    if (other.label === "slot" || other.isSensor) continue;
     const speed = Math.hypot(coin.velocity.x, coin.velocity.y);
     if (speed > 1.8) sfx.tick();
   }
 });
 
-function drawTable(m) {
-  const x = m.tableX;
-  const y = m.floor;
-  const w = m.tableW;
-  const h = m.tableH;
-  ctx.fillStyle = "#c7a27a";
-  ctx.fillRect(x, y, w, h);
-  ctx.fillStyle = "#5a4635";
-  ctx.fillRect(x, y + h - 8, w, 8);
-  for (let plank = x + 12; plank < x + w - 8; plank += 18) {
-    ctx.fillRect(plank, y + 6, 2, h - 14);
-  }
-  ctx.fillStyle = "#f2ebd9";
-  ctx.fillRect(x + 3, y + 3, w - 6, 2);
-  ctx.fillStyle = "#1f1f1f";
-  ctx.fillRect(x, y, w, 3);
-  ctx.fillRect(x, y + h - 3, w, 3);
-  ctx.fillRect(x, y, 3, h);
-  ctx.fillRect(x + w - 3, y, 3, h);
-
-  const legW = 18;
-  const legTop = y + h;
-  const legH = m.h - legTop - 10;
-  const inset = Math.min(120, Math.floor(w * 0.18));
-  for (const lx of [x + 22, x + inset, x + w - inset - legW, x + w - 22 - legW]) {
-    ctx.fillStyle = "#5a4635";
-    ctx.fillRect(lx, legTop, legW, legH);
-    ctx.fillStyle = "#c7a27a";
-    ctx.fillRect(lx + 4, legTop, 3, legH - 4);
-    ctx.fillStyle = "#1f1f1f";
-    ctx.fillRect(lx, legTop, 3, legH);
-    ctx.fillRect(lx + legW - 3, legTop, 3, legH);
-    ctx.fillRect(lx - 4, legTop + legH - 6, legW + 8, 6);
-    ctx.fillRect(lx - 4, legTop + legH - 3, legW + 8, 3);
-  }
+function drawCoin(coin) {
+  if (coin.swallowed || centerInSlot(coin)) return;
+  const radius = CoinArt.radius;
+  const x = Math.round(coin.position.x - radius);
+  const y = Math.round(coin.position.y - radius);
+  ctx.drawImage(coin.sprite, x, y);
 }
 
 function draw() {
@@ -623,20 +558,14 @@ function draw() {
   if (!m) return;
   ctx.clearRect(0, 0, m.w, m.h);
   ctx.imageSmoothingEnabled = false;
-  drawTable(m);
-
+  drawTable(ctx, m.w, m.h);
   for (const coin of coins) {
     if (coin === dragged) continue;
-    const x = Math.round(coin.position.x - COIN_R);
-    const y = Math.round(coin.position.y - COIN_R);
-    ctx.drawImage(coinSprite, x, y);
+    drawCoin(coin);
   }
-  ctx.drawImage(pigSprite, m.bankX, m.bankY);
-  if (dragged && coins.has(dragged)) {
-    const x = Math.round(dragged.position.x - COIN_R);
-    const y = Math.round(dragged.position.y - COIN_R);
-    ctx.drawImage(coinSprite, x, y);
-  }
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(PigArt.canvas, m.pigX, m.pigY);
+  if (dragged && coins.has(dragged)) drawCoin(dragged);
 }
 
 let last = performance.now();
@@ -650,6 +579,8 @@ function frame(now) {
   let steps = 0;
   while (acc >= 16.666 && steps < 3) {
     Engine.update(engine, 16.666);
+    lockCoinSpin();
+    collectBanked();
     flushRemovals();
     acc -= 16.666;
     steps++;
